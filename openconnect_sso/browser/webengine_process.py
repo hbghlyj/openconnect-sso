@@ -9,11 +9,10 @@ import attr
 import pkg_resources
 import structlog
 
-from PyQt6.QtCore import QUrl, QTimer, pyqtSlot, Qt
-from PyQt6.QtNetwork import QNetworkCookie, QNetworkProxy
-from PyQt6.QtWebEngineCore import QWebEngineScript, QWebEngineProfile, QWebEnginePage
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWidgets import QApplication, QWidget, QSizePolicy, QVBoxLayout
+from PyQt5.QtCore import QUrl, QTimer
+from PyQt5.QtNetwork import QNetworkCookie, QNetworkProxy
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineScript, QWebEngineProfile
+from PyQt5.QtWidgets import QApplication
 
 from openconnect_sso import config
 
@@ -109,7 +108,7 @@ class Process(multiprocessing.Process):
         web.authenticate_at(QUrl(startup_info.url), startup_info.credentials)
 
         web.show()
-        rc = app.exec()
+        rc = app.exec_()
 
         logger.info("Exiting browser")
         return rc
@@ -146,16 +145,11 @@ class WebBrowser(QWebEngineView):
         cookie_store.cookieAdded.connect(self._on_cookie_added)
         self.page().loadFinished.connect(self._on_load_finished)
 
-    def createWindow(self, type):
-        if type == QWebEnginePage.WebDialog:
-            self._popupWindow = WebPopupWindow(self.page().profile())
-            return self._popupWindow.view()
-
     def authenticate_at(self, url, credentials):
         script_source = pkg_resources.resource_string(__name__, "user.js").decode()
         script = QWebEngineScript()
-        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
-        script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
+        script.setInjectionPoint(QWebEngineScript.DocumentCreation)
+        script.setWorldId(QWebEngineScript.ApplicationWorld)
         script.setSourceCode(script_source)
         self.page().scripts().insert(script)
 
@@ -163,10 +157,9 @@ class WebBrowser(QWebEngineView):
             logger.info("Initiating autologin", cred=credentials)
             for url_pattern, rules in self._auto_fill_rules.items():
                 script = QWebEngineScript()
-                script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
-                script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
-                script.setSourceCode(
-                    f"""
+                script.setInjectionPoint(QWebEngineScript.DocumentReady)
+                script.setWorldId(QWebEngineScript.ApplicationWorld)
+                script.setSourceCode(f"""
 // ==UserScript==
 // @include {url_pattern}
 // ==/UserScript==
@@ -176,8 +169,7 @@ function autoFill() {{
     setTimeout(autoFill, 1000);
 }}
 autoFill();
-"""
-                )
+""")
                 self.page().scripts().insert(script)
 
         self.load(QUrl(url))
@@ -191,37 +183,6 @@ autoFill();
         logger.debug("Page loaded", url=url)
 
         self._on_update(Url(url))
-
-
-class WebPopupWindow(QWidget):
-    def __init__(self, profile):
-        super().__init__()
-        self._view = QWebEngineView(self)
-
-        super().setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        super().setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-
-        layout = QVBoxLayout()
-        super().setLayout(layout)
-        layout.addWidget(self._view)
-
-        self._view.setPage(QWebEnginePage(profile, self._view))
-
-        self._view.titleChanged.connect(super().setWindowTitle)
-        self._view.page().geometryChangeRequested.connect(
-            self.handleGeometryChangeRequested
-        )
-        self._view.page().windowCloseRequested.connect(super().close)
-
-    def view(self):
-        return self._view
-
-    @pyqtSlot("const QRect")
-    def handleGeometryChangeRequested(self, newGeometry):
-        self._view.setMinimumSize(newGeometry.width(), newGeometry.height())
-        super().move(newGeometry.topLeft() - self._view.pos())
-        super().resize(0, 0)
-        super().show()
 
 
 def to_str(qval):

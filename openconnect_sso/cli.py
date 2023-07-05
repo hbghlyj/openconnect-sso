@@ -90,12 +90,6 @@ def create_argparser():
     )
 
     parser.add_argument(
-        "--ac-version",
-        help="AnyConnect Version used for authentication and for OpenConnect, defaults to %(default)s",
-        default="4.7.00136",
-    )
-
-    parser.add_argument(
         "-l",
         "--log-level",
         help="",
@@ -122,7 +116,7 @@ class StoreOpenConnectArgs(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         if "--" in values:
             values.remove("--")
-        setattr(namespace, self.dest, values[1:])
+        setattr(namespace, self.dest, values)
 
 
 class LogLevel(enum.IntEnum):

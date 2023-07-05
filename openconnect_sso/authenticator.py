@@ -10,12 +10,11 @@ logger = structlog.get_logger()
 
 
 class Authenticator:
-    def __init__(self, host, proxy=None, credentials=None, version=None):
+    def __init__(self, host, proxy=None, credentials=None):
         self.host = host
         self.proxy = proxy
         self.credentials = credentials
-        self.version = version
-        self.session = create_http_session(proxy, version)
+        self.session = create_http_session(proxy)
 
     async def authenticate(self, display_mode):
         self._detect_authentication_target_url()
@@ -61,7 +60,7 @@ class Authenticator:
         logger.debug("Auth target url", url=self.host.vpn_url)
 
     def _start_authentication(self):
-        request = _create_auth_init_request(self.host, self.host.vpn_url, self.version)
+        request = b'<?xml version="1.0" encoding="UTF-8"?>\n<config-auth client="vpn" type="init" aggregate-auth-version="2">\n<version who="vpn">4.10.07061</version>\n<device-id computer-name="Laptop-98" device-type="LENOVO 82DG" platform-version="10.0.22621 " unique-id="BF65238923F57B59258D99FB6D381911D965E62C7C3E78A9ADD60D0F67315070" unique-id-global="82391E605F37366BE954F584F699D87796800F37">win</device-id>\n<mac-address-list>\n<mac-address>00-42-38-ac-45-c7</mac-address></mac-address-list>\n<group-access>https://vpn.ox.ac.uk</group-access>\n<capabilities>\n<auth-method>multiple-cert</auth-method>\n<auth-method>single-sign-on</auth-method>\n<auth-method>single-sign-on-v2</auth-method>\n<auth-method>single-sign-on-external-browser</auth-method></capabilities>\n</config-auth>'
         logger.debug("Sending auth init request", content=request)
         response = self.session.post(self.host.vpn_url, request)
         logger.debug("Auth init response received", content=response.content)
@@ -74,7 +73,7 @@ class Authenticator:
 
     def _complete_authentication(self, auth_request_response, sso_token):
         request = _create_auth_finish_request(
-            self.host, auth_request_response, sso_token, self.version
+            self.host, auth_request_response, sso_token
         )
         logger.debug("Sending auth finish request", content=request)
         response = self.session.post(self.host.vpn_url, request)
@@ -90,12 +89,12 @@ class AuthResponseError(AuthenticationError):
     pass
 
 
-def create_http_session(proxy, version):
+def create_http_session(proxy):
     session = requests.Session()
     session.proxies = {"http": proxy, "https": proxy}
     session.headers.update(
         {
-            "User-Agent": f"AnyConnect Linux_64 {version}",
+            "User-Agent": "AnyConnect Linux_64 4.7.00136",
             "Accept": "*/*",
             "Accept-Encoding": "identity",
             "X-Transcend-Version": "1",
@@ -111,7 +110,7 @@ def create_http_session(proxy, version):
 E = objectify.ElementMaker(annotate=False)
 
 
-def _create_auth_init_request(host, url, version):
+def _create_auth_init_request(host, url):
     ConfigAuth = getattr(E, "config-auth")
     Version = E.version
     DeviceId = getattr(E, "device-id")
@@ -122,7 +121,7 @@ def _create_auth_init_request(host, url, version):
 
     root = ConfigAuth(
         {"client": "vpn", "type": "init", "aggregate-auth-version": "2"},
-        Version({"who": "vpn"}, version),
+        Version({"who": "vpn"}, "4.7.00136"),
         DeviceId("linux-64"),
         GroupSelect(host.name),
         GroupAccess(url),
@@ -201,7 +200,7 @@ class AuthCompleteResponse:
     server_cert_hash = attr.ib(converter=str)
 
 
-def _create_auth_finish_request(host, auth_info, sso_token, version):
+def _create_auth_finish_request(host, auth_info, sso_token):
     ConfigAuth = getattr(E, "config-auth")
     Version = E.version
     DeviceId = getattr(E, "device-id")
@@ -212,7 +211,7 @@ def _create_auth_finish_request(host, auth_info, sso_token, version):
 
     root = ConfigAuth(
         {"client": "vpn", "type": "auth-reply", "aggregate-auth-version": "2"},
-        Version({"who": "vpn"}, version),
+        Version({"who": "vpn"}, "4.7.00136"),
         DeviceId("linux-64"),
         SessionToken(),
         SessionId(),

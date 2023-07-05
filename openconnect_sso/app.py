@@ -3,12 +3,11 @@ import getpass
 import json
 import logging
 import os
+import shlex
 import signal
 import subprocess
 from pathlib import Path
 
-import shlex
-import shutil
 import structlog
 from prompt_toolkit import HTML
 from prompt_toolkit.shortcuts import radiolist_dialog
@@ -73,11 +72,7 @@ def run(args):
 
     try:
         return run_openconnect(
-            auth_response,
-            selected_profile,
-            args.proxy,
-            args.ac_version,
-            args.openconnect_args,
+            auth_response, selected_profile, args.proxy, args.openconnect_args
         )
     except KeyboardInterrupt:
         logger.warn("CTRL-C pressed, exiting")
@@ -118,12 +113,6 @@ async def _run(args, cfg):
         credentials.password = getpass.getpass(prompt=f"Password ({args.user}): ")
         cfg.credentials = credentials
 
-    if credentials and not credentials.totp:
-        credentials.totp = getpass.getpass(
-            prompt=f"TOTP secret (leave blank if not required) ({args.user}): "
-        )
-        cfg.credentials = credentials
-
     if cfg.default_profile and not (args.use_profile_selector or args.server):
         selected_profile = cfg.default_profile
     elif args.use_profile_selector or args.profile_path:
@@ -143,14 +132,12 @@ async def _run(args, cfg):
             "Cannot determine server address. Invalid arguments specified.", 19
         )
 
-    cfg.default_profile = config.HostProfile(
-        selected_profile.address, selected_profile.user_group, selected_profile.name
-    )
+    cfg.default_profile = selected_profile
 
     display_mode = config.DisplayMode[args.browser_display_mode.upper()]
 
     auth_response = await authenticate_to(
-        selected_profile, args.proxy, credentials, display_mode, args.ac_version
+        selected_profile, args.proxy, credentials, display_mode
     )
 
     if args.on_disconnect and not cfg.on_disconnect:
@@ -178,38 +165,24 @@ async def select_profile(profile_list):
     return selection
 
 
-def authenticate_to(host, proxy, credentials, display_mode, version):
+def authenticate_to(host, proxy, credentials, display_mode):
     logger.info("Authenticating to VPN endpoint", name=host.name, address=host.address)
-    return Authenticator(host, proxy, credentials, version).authenticate(display_mode)
+    return Authenticator(host, proxy, credentials).authenticate(display_mode)
 
 
-def run_openconnect(auth_info, host, proxy, version, args):
-    as_root = next((prog for prog in ("doas", "sudo") if shutil.which(prog)), None)
-    if not as_root:
-        logger.error(
-            "Cannot find suitable program to execute as superuser (doas/sudo), exiting"
-        )
-        return 20
-
+def run_openconnect(auth_info, host, proxy, args):
     command_line = [
-        as_root,
-        "openconnect",
-        "--useragent",
-        f"AnyConnect Linux_64 {version}",
-        "--version-string",
-        version,
-        "--cookie-on-stdin",
-        "--servercert",
-        auth_info.server_cert_hash,
+        r"c:\Program Files\OpenConnect\openconnect.exe",
+        "--cookie",
+        auth_info.session_token,
         *args,
         host.vpn_url,
     ]
     if proxy:
         command_line.extend(["--proxy", proxy])
 
-    session_token = auth_info.session_token.encode("utf-8")
     logger.debug("Starting OpenConnect", command_line=command_line)
-    return subprocess.run(command_line, input=session_token).returncode
+    return subprocess.run(command_line).returncode
 
 
 def handle_disconnect(command):
