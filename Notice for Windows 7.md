@@ -17,3 +17,5 @@ The driver is not automatically installed, so you need to install it separately:
 4. If Wintun driver is successfully installed, you can see "Wintun userspace tunnel" under "network adapter" in [device manager](https://support.microsoft.com/en-us/windows/open-device-manager-a7f2db46-faaf-24f0-8b7b-9e4a6032fc8c).
    
    ![捕获](https://github.com/hbghlyj/openconnect-sso/assets/53823634/1f59a47c-f1e7-47d9-a23a-0cbcf443e76c)
+
+   If the system failed to verify the digital signature, you need to install KB4474419 update for Win 7. See [this issue](https://github.com/tailscale/tailscale/issues/1976).
