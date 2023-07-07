@@ -110,13 +110,6 @@ def get_default_auto_fill_rules():
 @attr.s
 class Credentials(ConfigNode):
     username = attr.ib()
-    @property
-    def totp(self):
-        try:
-            return pyotp.TOTP('75wyzlgrcdslnyln').now()
-        except:
-            logger.info("Cannot retrieve one-time password.")
-            return ""
 
     @property
     def password(self):
